@@ -1,0 +1,50 @@
+# ─── Environment & Secrets ────────────────────────────────────────────────────
+# NEVER commit real credentials
+backend/.env
+.env
+.env.*
+!.env.example
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.so
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ─── AWS SAM ──────────────────────────────────────────────────────────────────
+.aws-sam/
+samconfig.toml
+
+# ─── IDE / Editor ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+.kiro/
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Node / Frontend (handled by frontend/.gitignore too) ────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/

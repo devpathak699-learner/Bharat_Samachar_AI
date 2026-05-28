@@ -1,0 +1,138 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Bharat Samachar - AI Multilingual News Platform
+
+Globals:
+  Function:
+    Runtime: python3.11
+    MemorySize: 512
+    Timeout: 120
+    Environment:
+      Variables:
+        BEDROCK_MODEL_ID: anthropic.claude-3-sonnet-20240229-v1:0
+        DYNAMO_TABLE_NAME: !Ref ArticlesTable
+        S3_BUCKET_NAME: !Ref AudioBucket
+        AWS_DEFAULT_REGION: ap-south-1
+  Api:
+    Cors:
+      AllowOrigin: "'*'"
+      AllowHeaders: "'Content-Type,Authorization'"
+      AllowMethods: "'POST,GET,OPTIONS'"
+
+Resources:
+  # ── API Gateway ──────────────────────────────────────────────
+  BharatSamacharApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: bharat-samachar-api
+      StageName: prod
+      Description: Bharat Samachar API Gateway
+
+  # ── Lambda: Process Article ──────────────────────────────────
+  ProcessArticleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: bharat-samachar-process-article
+      CodeUri: backend/
+      Handler: lambda_handlers.process_article.handler
+      Description: Orchestrates article extraction, translation, audio, fact-check
+      Timeout: 180
+      MemorySize: 1024
+      Policies:
+        - AmazonBedrockFullAccess
+        - AmazonPollyFullAccess
+        - AmazonTranslateReadOnly
+        - AmazonDynamoDBFullAccess
+        - AmazonS3FullAccess
+      Events:
+        ProcessApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BharatSamacharApi
+            Path: /api/process
+            Method: post
+
+  # ── Lambda: Health Check ─────────────────────────────────────
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: bharat-samachar-health
+      CodeUri: backend/
+      Handler: lambda_handlers.health.handler
+      Timeout: 10
+      Events:
+        HealthApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BharatSamacharApi
+            Path: /health
+            Method: get
+
+  # ── Lambda: Get Article ──────────────────────────────────────
+  GetArticleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: bharat-samachar-get-article
+      CodeUri: backend/
+      Handler: lambda_handlers.get_article.handler
+      Policies:
+        - AmazonDynamoDBReadOnlyAccess
+      Events:
+        GetArticleApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BharatSamacharApi
+            Path: /api/article/{article_id}
+            Method: get
+
+  # ── DynamoDB Table ───────────────────────────────────────────
+  ArticlesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: bharat-samachar-articles
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: article_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: article_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: BharatSamachar
+
+  # ── S3 Bucket (Audio Storage) ────────────────────────────────
+  AudioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub bharat-samachar-audio-${AWS::AccountId}
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAudioAfter30Days
+            Status: Enabled
+            ExpirationInDays: 30
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [GET]
+            AllowedOrigins: ["*"]
+            MaxAge: 3600
+      Tags:
+        - Key: Project
+          Value: BharatSamachar
+
+Outputs:
+  ApiGatewayUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${BharatSamacharApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+
+  ArticlesTableName:
+    Description: DynamoDB table name
+    Value: !Ref ArticlesTable
+
+  AudioBucketName:
+    Description: S3 bucket for audio files
+    Value: !Ref AudioBucket
